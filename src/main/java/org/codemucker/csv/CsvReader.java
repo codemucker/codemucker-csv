@@ -23,8 +23,7 @@ public class CsvReader implements Closeable {
 	private final ArrayList<String> recordBuf = new ArrayList<>(recordNumFields);
 	private final StringBuilder fieldBuf = new StringBuilder(recordFieldLength);
 	private final int maxRecordSizeChars = (10 * 1000 * 1000 ) / 2;//char is 2 bytes, so memory size ~= X * 2 chars
-	
-	private char[] buf = new char[1];//avoid constant reallocation
+	private final char[] charBuf = new char[1];//avoid constant reallocation
 	
 	public CsvReader(String s) {
 		this(new StringReader(s));
@@ -59,7 +58,7 @@ public class CsvReader implements Closeable {
 				throw new RecordTooLongException("Exceeded " + maxRecordSizeChars + " characters");
 			}
 			try {
-				int bytesRead = reader.read(buf);
+				int bytesRead = reader.read(charBuf);
 				if (bytesRead == -1) {//end of stream
 					if(inEscape && !possibleEndOfField){
 						//expect more chars
@@ -74,7 +73,7 @@ public class CsvReader implements Closeable {
 				throw new CsvException("Error reading stream",e);
 			}
 			
-			char c = buf[0];
+			char c = charBuf[0];
 			if (inEscape) {
 				if( c == ','){
 					if(previousChar == '"'){
