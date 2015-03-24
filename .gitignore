@@ -1,0 +1,33 @@
+# maven
+target/
+
+# maven release plugin
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.next
+release.properties
+
+# other editors
+~$*
+*~
+
+# random
+
+*.log
+out.txt
+
+# eclipse
+.bin/
+.settings/
+.project
+.classpath
+
+# svn
+.svn
+
+#gwt
+.gwt/
+src/main/gwt-unitCache/
+#gwt devmode plugin when using grizzly server
+src/main/webapp/WEB-INF/deploy/
+src/main/webapp/devmode/
