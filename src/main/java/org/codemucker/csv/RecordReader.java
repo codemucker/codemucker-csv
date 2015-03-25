@@ -1,9 +1,20 @@
 package org.codemucker.csv;
 
-import org.apache.commons.codec.binary.Base64;
+import org.codemucker.csv.encode.SerialiserFactory;
 
 public class RecordReader {
-
+	
+	private final Serialiser serialiser;
+	
+	public RecordReader(){	
+		this(SerialiserFactory.getSerialiser());
+	}
+	
+	public RecordReader(Serialiser serialiser){
+		this.serialiser = serialiser;
+	}
+	
+	
 	public boolean readBool(String[] record, int idx, boolean defaultVal) {
 		String val = readString(record, idx, defaultVal ? "t" : "f").toLowerCase();
 		switch (val) {
@@ -52,7 +63,7 @@ public class RecordReader {
 		if (val == null) {
 			return null;
 		}
-		byte[] data = Base64.decodeBase64(val);
+		byte[] data = serialiser.decodeBase64(val);
 		return data;
 	}
 

@@ -14,7 +14,7 @@ import org.codemucker.lang.annotation.NotThreadSafe;
 public class CsvReader implements Closeable {
 
 	private final Reader reader;
-	private static final String[] EMPTY = new String[] {};
+	private static final String[] EMPTY_ARRAY = new String[] {};
 
 	private final int recordNumFields  = 15;//higher end number of record fields
 	private final int recordFieldLength = 30;//higher end of field length
@@ -24,6 +24,9 @@ public class CsvReader implements Closeable {
 	private final StringBuilder fieldBuf = new StringBuilder(recordFieldLength);
 	private final int maxRecordSizeChars = (10 * 1000 * 1000 ) / 2;//char is 2 bytes, so memory size ~= X * 2 chars
 	private final char[] charBuf = new char[1];//avoid constant reallocation
+	
+	private static final char FIELD_SEP_CHAR = ',';
+	private static final char ESC_CHAR = '"';
 	
 	public CsvReader(String s) {
 		this(new StringReader(s));
@@ -37,9 +40,13 @@ public class CsvReader implements Closeable {
 		this.reader = reader;
 	}
 
+	/**
+	 * Blocking read for the next record
+	 * 
+	 * @return
+	 * @throws CsvException
+	 */
 	public String[] readNext() throws  CsvException {
-		checkReady();
-		
 		//we use existing structures so we don't need to reallocate each time
 		//recordBuf.clear();
 		//fieldBuf.setLength(0);
@@ -75,8 +82,8 @@ public class CsvReader implements Closeable {
 			
 			char c = charBuf[0];
 			if (inEscape) {
-				if( c == ','){
-					if(previousChar == '"'){
+				if( c == FIELD_SEP_CHAR){
+					if(previousChar == ESC_CHAR){
 						recordBuf.add(fieldBuf.toString());
 						fieldBuf.setLength(0);
 						c = RESET_PREV;
@@ -85,10 +92,10 @@ public class CsvReader implements Closeable {
 					} else {
 						fieldBuf.append(c);
 					}
-				} else if (c == '"') {
+				} else if (c == ESC_CHAR) {
 					//possibly end escape, unless next char is also quote
-					if(previousChar == '"'){
-						fieldBuf.append('"');
+					if(previousChar == ESC_CHAR){
+						fieldBuf.append(ESC_CHAR);
 						c = RESET_PREV;//ignore the previous double quotes if a third comes along
 						possibleEndOfField = false;
 					} else {
@@ -98,7 +105,7 @@ public class CsvReader implements Closeable {
 					fieldBuf.append(c);
 				}
 			} else { //normal mode
-				if (c == ',') {
+				if (c == FIELD_SEP_CHAR) {
 					// next record
 					recordBuf.add(fieldBuf.toString());
 					fieldBuf.setLength(0);
@@ -113,7 +120,7 @@ public class CsvReader implements Closeable {
 					fieldBuf.setLength(0);
 					possibleEndOfField = false;
 					endRecord = true;
-				} else if (c == '"') {
+				} else if (c == ESC_CHAR) {
 					inEscape = true;
 				} else {
 					fieldBuf.append(c);
@@ -122,7 +129,7 @@ public class CsvReader implements Closeable {
 			previousChar = c;
 		}
 //	
-		String[] result = recordBuf.toArray(EMPTY);
+		String[] result = recordBuf.toArray(EMPTY_ARRAY);
 		recordBuf.clear();
 		fieldBuf.setLength(0);	
 		return result;
@@ -130,18 +137,6 @@ public class CsvReader implements Closeable {
 		//return recordBuf.toArray(EMPTY);
 	}
 
-	private void checkReady()throws CsvException {
-		boolean canRead = false;
-		try {
-			canRead = reader.ready();
-		}catch (IOException e) {
-			throw new CsvException("can't read stream",e);
-		}
-		if(!canRead){
-			throw new EndOfStreamException("can't read stream");
-		}
-	}
-	
 	@Override
 	public void close() throws IOException {
 		recordBuf.clear();

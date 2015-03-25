@@ -1,6 +1,6 @@
 package org.codemucker.csv;
 
-import org.apache.commons.codec.binary.Base64;
+import org.codemucker.csv.encode.SerialiserFactory;
 import org.codemucker.lang.annotation.NotThreadSafe;
 
 @NotThreadSafe
@@ -12,8 +12,20 @@ public class CsvWriter {
 	private final int trimToSize = 1000;
 	private final StringBuilder sb = new StringBuilder(initSize);
 	
+	private static final char FIELD_SEP_CHAR = ',';
+	
+	private final Serialiser serialiser;
+	
+	public CsvWriter(){	
+		this(SerialiserFactory.getSerialiser());
+	}
+	
+	public CsvWriter(Serialiser serialiser){
+		this.serialiser = serialiser;
+	}
+	
 	public CsvWriter write(byte[] bytes) {
-		String val = Base64.encodeBase64String(bytes);
+		String val = serialiser.encodeBase64(bytes);
 		write(val,ESCAPE);
 		return this;
 	}
@@ -76,7 +88,7 @@ public class CsvWriter {
 				boolean doEscape = false;
 				for(int i = 0;i < s.length();i++){
 					char c = s.charAt(i);
-					if(c == '"' || c == ',' || c == '\n' ){
+					if(c == '"' || c == FIELD_SEP_CHAR || c == '\n' ){
 						doEscape = true;
 						break;
 					}
