@@ -2,15 +2,15 @@ package org.codemucker.csv;
 
 import org.codemucker.csv.encode.SerialiserFactory;
 
-public class RecordReader {
+public class CsvRecordReader {
 	
 	private final Serialiser serialiser;
 	
-	public RecordReader(){	
+	public CsvRecordReader(){	
 		this(SerialiserFactory.getSerialiser());
 	}
 	
-	public RecordReader(Serialiser serialiser){
+	public CsvRecordReader(Serialiser serialiser){
 		this.serialiser = serialiser;
 	}
 	
