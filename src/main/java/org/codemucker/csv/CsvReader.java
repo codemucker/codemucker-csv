@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.codemucker.csv.encode.DefaultSerialiserProvider;
+import org.codemucker.csv.encode.DefaultSerialiser;
 import org.codemucker.lang.IBuilder;
 import org.codemucker.lang.annotation.NotThreadSafe;
 import org.codemucker.lang.annotation.ThreadSafe;
@@ -452,7 +452,7 @@ public class CsvReader implements Closeable,ICsvReader {
 					"expect reader, string or input stream");
 
 			Preconditions.checkArgument(!(threadSafe && reuseRecord),"can't reuse record if in threadsafe mode");
-			Serialiser ser = serialiser==null?DefaultSerialiserProvider.getSerialiser():serialiser;
+			Serialiser ser = serialiser==null?DefaultSerialiser.get():serialiser;
 			
 			return new CsvReader(reader, fieldSepChar, escapeChar, commentChar,
 					commentsEnabled, fieldBufSize, fieldBufMaxSize,
@@ -478,7 +478,7 @@ public class CsvReader implements Closeable,ICsvReader {
 			threadSafe = true;
 			reuseRecord = false;
 			
-			serialiser = DefaultSerialiserProvider.getSerialiser();
+			serialiser = DefaultSerialiser.get();
 			return this;
 		}
 

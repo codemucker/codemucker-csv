@@ -7,7 +7,7 @@ import org.codemucker.csv.Serialiser;
  * older version causing issues, We can't use the new jva.util.Base64 either as
  * that is only available in java 1.8+. Make a best effort to find one
  */
-public class DefaultSerialiserProvider {
+public class DefaultSerialiser {
 
 	private static Serialiser INSTANCE;
 
@@ -36,7 +36,7 @@ public class DefaultSerialiserProvider {
 		INSTANCE = null;
 	}
 
-	public static void setDefaultSerialiser(Serialiser s) {
+	public static void set(Serialiser s) {
 		if (s == null) {
 			autoDetectSerialiser();
 		} else {
@@ -44,7 +44,7 @@ public class DefaultSerialiserProvider {
 		}
 	}
 
-	public static Serialiser getSerialiser() {
+	public static Serialiser get() {
 		if (INSTANCE == null) {
 			throw new RuntimeException(
 					"no serialiser set and could not auto discover one");
@@ -52,7 +52,7 @@ public class DefaultSerialiserProvider {
 		return INSTANCE;
 	}
 
-	private DefaultSerialiserProvider() {
+	private DefaultSerialiser() {
 	}
 
 }

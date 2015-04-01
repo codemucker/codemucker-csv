@@ -8,7 +8,7 @@ import java.util.Date;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.codemucker.csv.encode.DefaultSerialiserProvider;
+import org.codemucker.csv.encode.DefaultSerialiser;
 import org.codemucker.lang.annotation.ThreadSafe;
 import org.joda.time.DateTime;
 
@@ -468,8 +468,8 @@ public class CsvWriter implements ICsvWriter {
 
 		public ICsvWriter build() {
 			Preconditions.checkNotNull(appender, "expect output");
-			Serialiser ser = serialiser == null ? DefaultSerialiserProvider
-					.getSerialiser() : serialiser;
+			Serialiser ser = serialiser == null ? DefaultSerialiser
+					.get() : serialiser;
 			return new CsvWriter(appender, ser, fieldSep, commentChar, threadsafe, quoteEmptyStrings);
 		}
 

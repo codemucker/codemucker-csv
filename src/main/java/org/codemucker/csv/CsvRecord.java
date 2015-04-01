@@ -4,7 +4,7 @@ import java.io.StringWriter;
 import java.util.Arrays;
 import java.util.Date;
 
-import org.codemucker.csv.encode.DefaultSerialiserProvider;
+import org.codemucker.csv.encode.DefaultSerialiser;
 import org.codemucker.lang.annotation.NotThreadSafe;
 import org.joda.time.DateTime;
 
@@ -24,11 +24,11 @@ public class CsvRecord implements ICsvRecord {
 	}
 
 	public CsvRecord(Serialiser serialiser) {
-		this.serialiser = serialiser==null?DefaultSerialiserProvider.getSerialiser():serialiser;
+		this.serialiser = serialiser==null?DefaultSerialiser.get():serialiser;
 	}
 
 	public CsvRecord(Serialiser serialiser,String[] data) {
-		this.serialiser = serialiser==null?DefaultSerialiserProvider.getSerialiser():serialiser;
+		this.serialiser = serialiser==null?DefaultSerialiser.get():serialiser;
 		this.data = data;
 	}
 	
