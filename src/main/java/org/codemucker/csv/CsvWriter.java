@@ -466,7 +466,7 @@ public class CsvWriter implements ICsvWriter {
 		private Serialiser serialiser;
 		private Appendable appender;
 
-		public ICsvWriter build() {
+		public CsvWriter build() {
 			Preconditions.checkNotNull(appender, "expect output");
 			Serialiser ser = serialiser == null ? DefaultSerialiser
 					.get() : serialiser;
