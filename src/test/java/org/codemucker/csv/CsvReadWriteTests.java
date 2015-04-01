@@ -9,8 +9,17 @@ import org.junit.Test;
 public class CsvReadWriteTests {
 
 	@Test
-	public void happyPath() throws Exception {
+	public void happyPathSingleLine() throws Exception {
 		checkReadWrite("a,b,c", new String[] { "a", "b", "c" });
+	}
+	
+	@Test
+	public void readHappyPathMultiLine() throws Exception {
+		CsvReader r = CsvReader.with().input("a,b,c\nd,e\nf").defaults().build();
+		
+		Expect.that(r.readNextRecord().getData()).is(AList.inOrder().withOnly().items(new String[]{"a","b","c"}));
+		Expect.that(r.readNextRecord().getData()).is(AList.inOrder().withOnly().items(new String[]{"d","e"}));
+		Expect.that(r.readNextRecord().getData()).is(AList.inOrder().withOnly().items(new String[]{"f"}));
 	}
 
 	@Test
@@ -68,20 +77,14 @@ public class CsvReadWriteTests {
 	
 	private void checkReadWrite(String line, String[] expect, String expectCsvLine) throws CsvException {
 		checkRead(line, expect);
-		StringWriter sw = new StringWriter();
-		ICsvWriter w = CsvWriter.with().customPrimitives(false).output(sw).build();
-		
-		StringWriter sw2 = new StringWriter();
-		ICsvWriter w2 = CsvWriter.with().customPrimitives(true).output(sw2).build();
+		StringWriter roundTripLine = new StringWriter();
+		ICsvWriter w = CsvWriter.with().output(roundTripLine).build();
 		
 		for (String field : expect) {
 			w.write(field);
-			w2.write(field);
 		}
 		
-		Expect.that(sw.toString()).isEqualTo(expectCsvLine);
-		Expect.that(sw2.toString()).isEqualTo(expectCsvLine);
-		
+		Expect.that(roundTripLine.toString()).isEqualTo(expectCsvLine);
 	
 	}
 
@@ -93,7 +96,6 @@ public class CsvReadWriteTests {
 			throw new CsvException("error while reading line:" + line, e);
 		}
 		Expect.that(actual.getData()).is(AList.inOrder().withOnly().items(expect));
-		
 	}
 	
 }

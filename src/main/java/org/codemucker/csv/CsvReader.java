@@ -22,8 +22,11 @@ import com.google.common.base.Preconditions;
  * Read Csv records. Use:
  * 
  * <pre>
- * CsvReader.with().threadsafe(false).input(...).build();
+ * CsvReader r = CsvReader.with().input(...).threadsafe(false).build();
  * 
+ * ICsvRecord rec = r.readNextRecord();
+ * ...
+ * rec = r.readNextRecord();
  * </pre>
  */
 @ThreadSafe(caveats="only if threadSafe true has been set")
@@ -514,17 +517,17 @@ public class CsvReader implements Closeable,ICsvReader {
 			return this;
 		}
 
-		public Builder fieldBufMaxSize(int fieldBufMaxSize) {
-			this.fieldBufMaxSize = fieldBufMaxSize;
+		public Builder fieldBufMaxSize(int i) {
+			this.fieldBufMaxSize = i;
 			return this;
 		}
 
-		public Builder setMaxRecordSizeMegs(int megs) {
-			maxNumberOfCharsPerRecord(megs*SIZE_1_MEG);
+		public Builder maxRecordSizeInMegs(int megs) {
+			maxRecordSizeInChars(megs*SIZE_1_MEG);
 			return this;
 		}
 		
-		public Builder maxNumberOfCharsPerRecord(int maxNumberOfCharsPerRecord) {
+		public Builder maxRecordSizeInChars(int maxNumberOfCharsPerRecord) {
 			this.maxNumberOfCharsPerRecord = maxNumberOfCharsPerRecord;
 			return this;
 		}
@@ -549,15 +552,20 @@ public class CsvReader implements Closeable,ICsvReader {
 			return this;
 		}
 
+		/**
+		 * If true then record reads are thread safe. That is multiple threads can attempt
+		 * to read the next record at once. You will also need to set {@link CsvReader#reuseRecord()}
+		 * to true.
+		 * 
+		 * Default is false
+		 */
 		public Builder threadSafe(boolean threadSafe) {
 			this.threadSafe = threadSafe;
 			return this;
 		}
 		
 		/**
-		 * If true then the returned record is reused when next record is loaded
-		 * @param threadSafe
-		 * @return
+		 * If true then the returned record is reused when next record is loaded. Default is true.
 		 */
 		public Builder reuseRecord(boolean reuseRecord) {
 			this.reuseRecord = reuseRecord;
