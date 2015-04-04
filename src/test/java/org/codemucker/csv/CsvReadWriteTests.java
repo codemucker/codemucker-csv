@@ -79,10 +79,11 @@ public class CsvReadWriteTests {
 		checkRead(line, expect);
 		StringWriter roundTripLine = new StringWriter();
 		ICsvWriter w = CsvWriter.with().output(roundTripLine).build();
-		
+		w.lock();
 		for (String field : expect) {
 			w.write(field);
 		}
+		w.unlock();
 		
 		Expect.that(roundTripLine.toString()).isEqualTo(expectCsvLine);
 	

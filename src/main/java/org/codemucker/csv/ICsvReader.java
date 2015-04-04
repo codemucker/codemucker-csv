@@ -9,4 +9,6 @@ public interface ICsvReader {
 
 	ICsvRecord readNextRecord(int skipNumLines) throws CsvException;
 
+	boolean hasMore();
+
 }

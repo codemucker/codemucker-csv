@@ -29,14 +29,14 @@ import com.google.common.base.Preconditions;
  * rec = r.readNextRecord();
  * </pre>
  */
-@ThreadSafe(caveats="only if threadSafe true has been set")
-public class CsvReader implements Closeable,ICsvReader {
+@ThreadSafe(caveats = "only if threadSafe true has been set")
+public class CsvReader implements Closeable, ICsvReader {
 
 	private static final String[] EMPTY_ARRAY = new String[] {};
-	
+
 	private static final boolean EMPTY_TO_NULL = true;
 	private static final boolean EMPTY_IF_BLANK = false;
-	
+
 	private static final char NL = '\n';
 
 	private final char[] charBuf = new char[1];// avoid constant reallocation
@@ -60,6 +60,9 @@ public class CsvReader implements Closeable,ICsvReader {
 	 */
 	private final int fieldBufMaxSize;
 
+	private int lineNumber;
+	private int charNumber;
+
 	/**
 	 * Largest number of chars any single record can contain. Used to protect
 	 * OOM eerors due to uploading very large csv files
@@ -81,24 +84,25 @@ public class CsvReader implements Closeable,ICsvReader {
 	private final boolean reuseRecord;
 
 	private int recordNumber = 0;
-	
+
 	private final Lock lock;
-	
+
 	private boolean hasMore = true;
 
-	private int conseqNumEscapes= 0;
+	private int conseqNumEscapes = 0;
 	boolean inEscape = false;
-	
+
 	/**
 	 * Reuse a record (if enabled) to reduce object allocation
 	 */
-	private CsvRecord record;
+	private ICsvRecord record;
 	private Serialiser serialiser;
 
 	private CsvReader(Reader reader, char fieldSepChar, char escapeChar,
 			char commentChar, boolean commentsEnabled, int fieldBufSize,
 			int fieldBufMaxSize, int fieldCharCount, int fieldValueBufMaxSize,
-			int maxNumberOfCharsPerRecord, boolean closeReader, boolean threadSafe, boolean reuseRecord,Serialiser serialiser) {
+			int maxNumberOfCharsPerRecord, boolean closeReader,
+			boolean threadSafe, boolean reuseRecord, Serialiser serialiser) {
 		this.reader = reader;
 		this.fieldSepChar = fieldSepChar;
 		this.escapeChar = escapeChar;
@@ -117,12 +121,12 @@ public class CsvReader implements Closeable,ICsvReader {
 		this.fieldValueBuf = new StringBuilder(fieldCharCount);
 
 		this.closeReader = closeReader;
-		this.lock = threadSafe?new ReentrantLock():null;
-		
+		this.lock = threadSafe ? new ReentrantLock() : null;
+
 		this.reuseRecord = reuseRecord;
 		this.serialiser = serialiser;
-		
-		this.record = reuseRecord?new CsvRecord(serialiser):null;
+
+		this.record = reuseRecord ? new CsvRecord(this, serialiser) : null;
 	}
 
 	@Override
@@ -153,7 +157,7 @@ public class CsvReader implements Closeable,ICsvReader {
 	@Override
 	public ICsvRecord readNextRecord(int skipNumLines) throws CsvException {
 		lock();
-		try {	
+		try {
 			return internalReadNextRecord(skipNumLines);
 		} finally {
 			unlock();
@@ -171,38 +175,38 @@ public class CsvReader implements Closeable,ICsvReader {
 		// we use existing buffer structures so we don't need to reallocate each
 		// time
 		try {
+			conseqNumEscapes = 0;
+			inEscape = false;
 			if (skipNumLines > 0) {
 				for (int lineNum = 0; lineNum < skipNumLines; lineNum++) {
 					readToEndOfLine();
 				}
 			}
-			for (int numCharsRead = 0; ; numCharsRead++) {
+			for (int numCharsRead = 0;; numCharsRead++) {
 				next();
 				if (numCharsRead > maxNumberOfCharsPerRecord) {
 					throw new CvsRecordTooLongException("Exceeded "
-							+ maxNumberOfCharsPerRecord + " characters");
+							+ maxNumberOfCharsPerRecord + " characters. " + readToMsg(numCharsRead));
 				}
 				char c = read();
-				if(isEndStream()){
-					if(inEscape){
-						if(isEndEscape()){
+				if (isEndStream()) {
+					if (inEscape) {
+						if (isEndEscape()) {
 							appendEscapes();
 							endEscapedField();
 						} else {
 							throw new CsvEndOfStreamException(
-									"End of stream, expecting more characters for escape sequence. Read "
-											+ numCharsRead
-											+ " characters for record");		
+									"End of stream, expecting more characters for escape sequence. " + readToMsg(numCharsRead));
 						}
 					} else {
 						endNonEscapedField();
 					}
 					break;
-				}else if (inEscape) {
-					if(c==escapeChar){
+				} else if (inEscape) {
+					if (c == escapeChar) {
 						conseqNumEscapes++;
-					} else if (c == fieldSepChar) {
-						if(isEndEscape()){
+					} else if (c == fieldSepChar || c == NL) {
+						if (isEndEscape()) {
 							appendEscapes();
 							endEscapedField();
 							inEscape = false;
@@ -212,11 +216,12 @@ public class CsvReader implements Closeable,ICsvReader {
 						}
 						conseqNumEscapes = 0;
 					} else {
-						if(isEndEscape()){
+						//"f, "f""x, """x
+						if (isEndEscape()) {
 							throw new CsvInvalidRecordException(
-									"Unexpected character, invalid number of escape '" + escapeChar + "' characters. Read "
-											+ numCharsRead
-											+ " characters for record " + recordNumber);
+									"Unexpected character, invalid number of escape '"
+											+ escapeChar
+											+ "' characters (" + conseqNumEscapes + "). " + readToMsg(numCharsRead));
 						} else {
 							appendEscapes();
 							appendToField(c);
@@ -248,89 +253,112 @@ public class CsvReader implements Closeable,ICsvReader {
 			}
 
 			String[] fields = fieldBuf.toArray(EMPTY_ARRAY);
-			fields = onRecord(recordNumber, fields );
+			fields = onRecord(recordNumber, fields);
 			return newRecord(fields);
 		} catch (IOException e) {
-			throw new CsvException("Error reading csv input", e);
+			throw new CsvException("Error reading csv input. " + readToMsg(), e);
 		} finally {
 			resetBuffers();
 		}
 	}
 
-	private boolean next() throws IOException{
-		if(hasMore){
-			int i = reader.read(charBuf);
-			if( i == -1){
-				hasMore = false;
-			}
-		}
-		return hasMore;
+	private String readToMsg(int numCharsRead) {
+		return "Read " + numCharsRead + " characters for record "
+				+ recordNumber + ". " + readToMsg();
 	}
 	
-	private char read(){
-		return charBuf[0];
+	private String readToMsg() {
+		return "Line " + lineNumber + ", char "
+				+ charNumber;
 	}
-	
-	private boolean isEndStream(){
-		return !hasMore;
-	}
-	
 	private void readToEndOfLine() throws IOException {
-		while (reader.read(charBuf) != -1) {
-			if (charBuf[0] == NL) {
+		while (next()) {
+			if (read() == NL) {
 				return;
 			}
 		}
 	}
 
+	private boolean next() throws IOException {
+		if (hasMore) {
+			int i = reader.read(charBuf);
+			if (i != -1) {
+				charNumber++;
+				if (read() == NL) {
+					lineNumber++;
+					charNumber = 0;
+				}
+			} else {
+				hasMore = false;
+			}
+		}
+		return hasMore;
+	}
+
+	@Override
+	public boolean hasMore() {
+		return hasMore;
+	}
+
+	private char read() {
+		return charBuf[0];
+	}
+
+	private boolean isEndStream() {
+		return !hasMore;
+	}
+
 	private boolean isEndEscape() {
-		boolean even = isEvenEscapes();
-		if(isStartOfField()){
-			return even;// e.g. "", or """"
+		if (isStartOfField()) {
+			return isEvenEscapes();// e.g. "", or """"
 		} else {
-			return !even;//  odd num. e.g.  "foo"  or "foo"""
+			return !isEvenEscapes();// odd num. e.g. "foo" or "foo"""
 		}
 	}
 
-	private boolean isEvenEscapes(){
+	private boolean isOddEscapes() {
+		return !isEndEscape();
+	}
+	
+	private boolean isEvenEscapes() {
 		return conseqNumEscapes % 2 == 0;
 	}
 
-	private boolean isStartOfField(){
-		return fieldValueBuf.length() ==0;
+	private boolean isStartOfField() {
+		return fieldValueBuf.length() == 0;
 	}
 
-	private void appendEscapes(){
-		if(conseqNumEscapes ==0){
+	private void appendEscapes() {
+		if (conseqNumEscapes == 0) {
 			return;
 		}
-		if(isStartOfField()){
-			//only odd number escapes
-			if(conseqNumEscapes > 2){
-				appendEscapes((conseqNumEscapes-1)/2);
+		if (isStartOfField()) {
+			// only odd number escapes
+			if (conseqNumEscapes > 2) {
+				appendEscapes((conseqNumEscapes - 1) / 2);
 			}
-		} else { //even num escapes
-			appendEscapes(conseqNumEscapes/2);
+		} else { // even num escapes
+			appendEscapes(conseqNumEscapes / 2);
 		}
 	}
-	
-	private void appendEscapes(int num){
-		for(int i = 0 ; i < num;i++){
+
+	private void appendEscapes(int num) {
+		for (int i = 0; i < num; i++) {
 			appendToField(escapeChar);
 		}
 	}
 
-	private void endEscapedField(){
+	private void endEscapedField() {
 		endField(EMPTY_IF_BLANK);
 	}
 
-	private void endNonEscapedField(){
+	private void endNonEscapedField() {
 		endField(EMPTY_TO_NULL);
 	}
-	
+
 	private void endField(boolean emptyIsNull) {
 		String fieldVal = fieldValueBuf.toString();
-		if(fieldVal.length() ==0 && emptyIsNull){
+		if (fieldVal.length() == 0 && emptyIsNull) {
 			fieldVal = null;
 		}
 		fieldVal = onField(recordNumber, fieldBuf.size(), fieldVal);
@@ -342,20 +370,19 @@ public class CsvReader implements Closeable,ICsvReader {
 		fieldValueBuf.append(c);
 	};
 
-	
-	private ICsvRecord newRecord(String[] data){
-		if(reuseRecord){
-			//reuse record to avoid allocation
+	private ICsvRecord newRecord(String[] data) {
+		if (reuseRecord) {
+			// reuse record to avoid allocation
 			record.setData(data);
 			return record;
 		}
-		return new CsvRecord(serialiser, data);
+		return new CsvRecord(this, serialiser, data);
 	}
 
 	private void nextRecord() {
 		recordNumber++;
 	}
-	
+
 	private String onField(int recordNumber, int fieldNumber, String fieldVal) {
 		// TODO:user callbacks
 		return fieldVal;
@@ -437,7 +464,7 @@ public class CsvReader implements Closeable,ICsvReader {
 		private boolean threadSafe;
 		private boolean reuseRecord;
 		private Serialiser serialiser;
-		
+
 		// char is 2 bytes, so memory size ~= X * 2 chars
 		private static final int SIZE_1_MEG = (1 * 1000 * 1000) / 2;
 
@@ -451,13 +478,16 @@ public class CsvReader implements Closeable,ICsvReader {
 			Preconditions.checkNotNull(reader,
 					"expect reader, string or input stream");
 
-			Preconditions.checkArgument(!(threadSafe && reuseRecord),"can't reuse record if in threadsafe mode");
-			Serialiser ser = serialiser==null?DefaultSerialiser.get():serialiser;
-			
+			Preconditions.checkArgument(!(threadSafe && reuseRecord),
+					"can't reuse record if in threadsafe mode");
+			Serialiser ser = serialiser == null ? DefaultSerialiser.get()
+					: serialiser;
+
 			return new CsvReader(reader, fieldSepChar, escapeChar, commentChar,
 					commentsEnabled, fieldBufSize, fieldBufMaxSize,
 					fieldValueBufSize, fieldValueBufMaxSize,
-					maxNumberOfCharsPerRecord, closeReader, threadSafe, reuseRecord, ser);
+					maxNumberOfCharsPerRecord, closeReader, threadSafe,
+					reuseRecord, ser);
 		}
 
 		public Builder defaults() {
@@ -477,7 +507,7 @@ public class CsvReader implements Closeable,ICsvReader {
 			closeReader = true;
 			threadSafe = true;
 			reuseRecord = false;
-			
+
 			serialiser = DefaultSerialiser.get();
 			return this;
 		}
@@ -523,10 +553,10 @@ public class CsvReader implements Closeable,ICsvReader {
 		}
 
 		public Builder maxRecordSizeInMegs(int megs) {
-			maxRecordSizeInChars(megs*SIZE_1_MEG);
+			maxRecordSizeInChars(megs * SIZE_1_MEG);
 			return this;
 		}
-		
+
 		public Builder maxRecordSizeInChars(int maxNumberOfCharsPerRecord) {
 			this.maxNumberOfCharsPerRecord = maxNumberOfCharsPerRecord;
 			return this;
@@ -553,9 +583,9 @@ public class CsvReader implements Closeable,ICsvReader {
 		}
 
 		/**
-		 * If true then record reads are thread safe. That is multiple threads can attempt
-		 * to read the next record at once. You will also need to set {@link CsvReader#reuseRecord()}
-		 * to true.
+		 * If true then record reads are thread safe. That is multiple threads
+		 * can attempt to read the next record at once. You will also need to
+		 * set {@link CsvReader#reuseRecord()} to true.
 		 * 
 		 * Default is false
 		 */
@@ -563,15 +593,16 @@ public class CsvReader implements Closeable,ICsvReader {
 			this.threadSafe = threadSafe;
 			return this;
 		}
-		
+
 		/**
-		 * If true then the returned record is reused when next record is loaded. Default is true.
+		 * If true then the returned record is reused when next record is
+		 * loaded. Default is true.
 		 */
 		public Builder reuseRecord(boolean reuseRecord) {
 			this.reuseRecord = reuseRecord;
 			return this;
 		}
-		
+
 		public Builder serialiser(Serialiser serialiser) {
 			this.serialiser = serialiser;
 			return this;

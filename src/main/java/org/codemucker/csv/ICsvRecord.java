@@ -58,6 +58,16 @@ public interface ICsvRecord {
 
 	IllegalArgumentException newInvalidValue(int idx, Object val, String expect);
 
-	public int getNumFields();
+	public int getTotalNumFields();
+	/**
+	 * Return the number of fields left after the offset
+	 * @return
+	 */
+	public int getRemainingNumFields();
+	public int getOffset();
+	
+	public void setOffset(int offset);
+	
+	public ICsvRecord nextRecord() throws CsvException;
 
 }

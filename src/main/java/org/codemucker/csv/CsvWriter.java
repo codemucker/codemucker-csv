@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.util.Date;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -48,16 +50,26 @@ public class CsvWriter implements ICsvWriter {
 	private int recordNumber = 0;
 
 	private final Lock lock;
+	
+	private final String linePrefix;
 
 	private CsvWriter(Appendable appender, Serialiser serialiser, char fieldSep,
-			char commentChar, boolean threadsafeRecord, boolean quoteEmptyStrings) {
+			char commentChar, boolean quoteEmptyStrings, Lock lock,String linePrefix) {
 		this.serialiser = serialiser;
 		this.appender = appender;
 		this.fieldSep = fieldSep;
 		this.commentChar = commentChar;
 		this.quoteEmptyStrings = quoteEmptyStrings;
 		this.flushable = (appender instanceof Flushable);
-		this.lock = threadsafeRecord ? new ReentrantLock() : null;
+		this.lock = lock;
+		this.linePrefix = linePrefix;
+	}
+
+	
+	@Override
+	public ICsvWriter getEmbeddedWriter() {
+		String childPefix =  linePrefix==null?"":(linePrefix + recordNumber + fieldSep);
+		return new CsvWriter(appender,serialiser,fieldSep,commentChar,quoteEmptyStrings,lock, childPefix);
 	}
 
 	public int getRecordNumber() {
@@ -81,7 +93,7 @@ public class CsvWriter implements ICsvWriter {
 
 	@Override
 	public ICsvWriter writeRecordComment(String s) throws CsvWriteException {
-		if (fieldNum != -1) {
+		if (hasOutputFields()) {
 			throw new CsvWriteException(
 					"within a record. Can't write comment. Needs to be written before a field is written for the current record");
 		}
@@ -91,7 +103,7 @@ public class CsvWriter implements ICsvWriter {
 		int start = 0;
 		for (int i = 0; i < s.length(); i++) {
 			char c = s.charAt(i);
-			if (c == '\n') {
+			if (c == NL) {
 				print(s.substring(start, i));
 				start = i + 1;
 				println();
@@ -337,30 +349,43 @@ public class CsvWriter implements ICsvWriter {
 
 	protected void nextField() throws CsvWriteException {
 		fieldNum++;
+		//handle embedded
+		if(fieldNum == 0 && linePrefix != null){
+			print(linePrefix + recordNumber + fieldSep);
+		}
 		if (fieldNum > 0) {
 			print(',');
 		}
 	}
 
 	@Override
+	public void lock(){
+		lock.lock();
+	}
+	
+	@Override
+	public void unlock(){
+		lock.unlock();
+	}
+	
+	@Override
 	public void beginRecord() throws CsvWriteException {
-		if (lock != null) {
-			lock.lock();
+		if(hasOutputFields()){
+			endRecord();
+			recordNumber++;
 		}
-		fieldNum = -1;
-		recordNumber++;
 	}
 
 	@Override
 	public void endRecord() throws CsvWriteException {
-		if (lock != null) {
-			lock.lock();
+		if(hasOutputFields()){
+			println();
+			fieldNum = -1;
 		}
-		fieldNum = -1;
-		println();
-		if (lock != null) {
-			lock.unlock();
-		}
+	}
+	
+	private boolean hasOutputFields(){
+		return fieldNum != -1;
 	}
 
 	public void printEscaped(String s) throws CsvWriteException {
@@ -470,7 +495,8 @@ public class CsvWriter implements ICsvWriter {
 			Preconditions.checkNotNull(appender, "expect output");
 			Serialiser ser = serialiser == null ? DefaultSerialiser
 					.get() : serialiser;
-			return new CsvWriter(appender, ser, fieldSep, commentChar, threadsafe, quoteEmptyStrings);
+			Lock lock = threadsafe?new ReentrantLock():new NoLock();
+			return new CsvWriter(appender, ser, fieldSep, commentChar, quoteEmptyStrings, lock, null);
 		}
 
 		public Builder defaults() {
@@ -524,5 +550,40 @@ public class CsvWriter implements ICsvWriter {
 			this.quoteEmptyStrings = enabled;
 			return this;
 		}
+	}
+	
+	private static class NoLock implements Lock {
+
+		@Override
+		public void lock() {
+			//do nothing
+		}
+
+		@Override
+		public void lockInterruptibly() throws InterruptedException {
+			//do nothing
+		}
+
+		@Override
+		public boolean tryLock() {
+			return true;
+		}
+
+		@Override
+		public boolean tryLock(long time, TimeUnit unit)
+				throws InterruptedException {
+			return true;
+		}
+
+		@Override
+		public void unlock() {
+			//do nothing
+		}
+
+		@Override
+		public Condition newCondition() {
+			throw new UnsupportedOperationException("consitions not supported");
+		}
+		
 	}
 }

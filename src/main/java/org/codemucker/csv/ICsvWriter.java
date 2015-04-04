@@ -53,6 +53,11 @@ public interface ICsvWriter {
 
 	ICsvWriter write(Date d) throws CsvWriteException;
 
+	Appendable getAppender();
+
+	void lock();
+	void unlock();
+
 	/**
 	 * Start writing the next record
 	 * 
@@ -60,10 +65,8 @@ public interface ICsvWriter {
 	 */
 	void beginRecord() throws CsvWriteException;
 	void endRecord() throws CsvWriteException;
-
 	void flush() throws CsvWriteException;
 
-	Appendable getAppender();
-
+	ICsvWriter getEmbeddedWriter();
 
 }

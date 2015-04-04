@@ -11,32 +11,52 @@ import org.joda.time.DateTime;
 @NotThreadSafe
 public class CsvRecord implements ICsvRecord {
 
+	private final ICsvReader reader;
 	private String[] data;
-
+	private int offset;
+	
 	private final Serialiser serialiser;
 
-	public CsvRecord(String[] data) {
-		this(null, data);
+	public CsvRecord(ICsvReader reader,String[] data) {
+		this(reader,null, data);
 	}
 	
-	public CsvRecord() {
-		this(null, null);
+	public CsvRecord(ICsvReader reader) {
+		this(reader,null, null);
 	}
 
-	public CsvRecord(Serialiser serialiser) {
+	public CsvRecord(ICsvReader reader,Serialiser serialiser) {
 		this.serialiser = serialiser==null?DefaultSerialiser.get():serialiser;
+		this.reader = reader;
 	}
 
-	public CsvRecord(Serialiser serialiser,String[] data) {
+	public CsvRecord(ICsvReader reader,Serialiser serialiser,String[] data) {
 		this.serialiser = serialiser==null?DefaultSerialiser.get():serialiser;
 		this.data = data;
+		this.reader = reader;
 	}
+	
+
+	@Override
+	public int getOffset() {
+		return offset;
+	}
+
+	@Override
+	public void setOffset(int offset) {
+		this.offset = offset;
+	}
+
 	
 	@Override
 	public String[] getData() {
 		return this.data;
 	}
 
+	@Override
+	public ICsvRecord nextRecord() throws CsvException {
+		return reader.readNextRecord();
+	}
 	@Override
 	public void setData(String[] record) {
 		this.data = record;
@@ -279,6 +299,7 @@ public class CsvRecord implements ICsvRecord {
 	}
 
 	public String _readStringOrError(int idx) {
+		idx = offset + idx;
 		if (data == null || idx >= data.length) {
 			throw new IllegalArgumentException("Expected not null for field " + idx + ", record is " + (data==null?null:Arrays.toString(data)));
 		}
@@ -286,6 +307,7 @@ public class CsvRecord implements ICsvRecord {
 	}
 	
 	public String _readStringOrNull(int idx) {
+		idx = offset + idx;
 		if (data == null || idx >= data.length) {
 			return null;
 		}
@@ -293,9 +315,15 @@ public class CsvRecord implements ICsvRecord {
 	}
 
 	@Override
-	public int getNumFields() {
+	public int getRemainingNumFields() {
+		return Math.max(0, getTotalNumFields() - offset);
+	}
+	
+	@Override
+	public int getTotalNumFields() {
 		return data == null?0:data.length;
 	}
+	
 	
 	@Override
 	public IllegalArgumentException newInvalidValue(int idx, Object val,
