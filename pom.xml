@@ -18,7 +18,9 @@
 		<app.build.timestamp>${maven.build.timestamp}</app.build.timestamp>
 		<codemucker.version>1.0-SNAPSHOT</codemucker.version>
 	</properties>
-
+    <scm>
+       <developerConnection>scm:git:git@github.com/codemucker/codemucker-csv.git</developerConnection>
+    </scm>
 	<repositories>
 		<repository>
 			<id>java.net repository</id>
