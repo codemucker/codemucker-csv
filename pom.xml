@@ -10,7 +10,7 @@
 		<relativePath>../codemucker-parent/pom.xml</relativePath>
 	</parent>
 	<artifactId>codemucker-csv</artifactId>
-	<name>org.codemucker - Csv Readers/Writer</name>
+	<name>org.codemucker - Csv (Csv Readers/Writers)</name>
 	<description>Read/Write CSV files and streams</description>
 	<packaging>jar</packaging>
 
